@@ -5,14 +5,14 @@
 [system]
 basis = "eigen"   # "spin" | "eigen": selects spinbasis/ or eigenbasis/ code and data/<basis>basis/
 dimensions = 2
-L = 6
+L = 4
 J2 = 0.5
 J1 = 1.0
 sign_rule = "FF"
 transl_invariant = true
 
 [sampler]
-SAMPLER = "metro"
+SAMPLER = "exact"   # "auto" | "exact" | "metro"; exact samples the whole Sz=0 sector
 # Monte Carlo samples per optimisation step, stated directly. This was
 # previously MONTECARLO = 4, a multiplier against a hidden 2048 -- same number
 # of samples, but you had to know about the 2048 to read it.
@@ -51,8 +51,8 @@ use_ntk = true   # neural tangent kernel
 on_the_fly = false
 
 [model]
-iter = 10000   # N_ITER
-layers = 4   # num_layers
+iter = 5000   # N_ITER
+layers = 2   # num_layers
 ratio = 6   # ratio: model dim : heads
 heads = 8   # n_heads
 attention_mode = "factored"   # options: 
@@ -119,7 +119,7 @@ ds_transition_steps = 400   # diagonal shift transition steps.
 #     aicr      b200-devel (04:00:00)  ->  230
 #               b200-batch (24:00:00)  ->  1380
 #     explorer  gpu        (04:00:00)  ->  230
-MAX_RUNTIME_MIN = 1380
+MAX_RUNTIME_MIN = 230
 SAVE_EVERY = 50
 PRINT_EVERY = 20
 DIAG_EVERY = -1   # sampling-health diag (ESS/R-hat/acc) -> .diag.jsonl.
@@ -221,7 +221,7 @@ EXACT_SAMPLER_MAX_STATES = 200_000
 # sweep_size = [-1, 36]
 
 # ----------------------------------------------------------------------
-# ACTIVE (2026-10-07): MATCHED 6x6, J2 = 0.5 COMPARISON, spin basis vs eigenbasis
+# (submitted 2026-10-07 from 2d_eigenbasis; kept for reference) MATCHED 6x6, J2 = 0.5 COMPARISON, spin basis vs eigenbasis
 #
 # Identical network and optimizer in both repos. Only the local basis (and each
 # basis's sampling) differs:
@@ -244,3 +244,31 @@ EXACT_SAMPLER_MAX_STATES = 200_000
 # reproduces the exact 4x4 E0/site -0.528620 to 1e-13, and on 6x6 every
 # connected state stays in Sz = 0.
 # ----------------------------------------------------------------------
+
+# ----------------------------------------------------------------------
+# ACTIVE (2026-10-08): 4x4 EXACT-SAMPLER SIZE SCAN, spin basis vs eigenbasis
+#
+# 4 widths x J2 in {0, 0.5} = 8 runs, matched one-to-one with the 8 runs of
+# config_spinbasis.toml (same widths, same order). Everything else is the
+# base config above: 2 layers, exact sampler (no Markov chain, so the
+# eigenbasis acceptance problem is out of the picture), auto_alpha on from
+# alpha = 2.0, 8192 samples, b200-devel.
+#
+#   width   d_model  heads  ratio (= d_head)   params
+#     XS        24      4      6               13,568
+#     S         48      8      6               52,480
+#     M         72     12      6              116,736
+#     L         96     16      6              206,336
+#
+# Exact 4x4 references (the driver also prints them):
+#   J2 = 0    E0/site = -0.701780
+#   J2 = 0.5  E0/site = -0.528620
+#
+# Submit (devel, 4 h windows; MAX_RUNTIME_MIN = 230):
+#   ./submit.sh config_eigenbasis.toml
+# ----------------------------------------------------------------------
+[sweep.system]
+J2 = [0.0, 0.5]
+
+[sweep_zip.model]
+heads = [4, 8, 12, 16]
