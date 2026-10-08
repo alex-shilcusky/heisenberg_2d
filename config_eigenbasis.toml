@@ -1,0 +1,246 @@
+# ----------------------------------------------------------------------
+# Base configuration
+# ----------------------------------------------------------------------
+
+[system]
+basis = "eigen"   # "spin" | "eigen": selects spinbasis/ or eigenbasis/ code and data/<basis>basis/
+dimensions = 2
+L = 6
+J2 = 0.5
+J1 = 1.0
+sign_rule = "FF"
+transl_invariant = true
+
+[sampler]
+SAMPLER = "metro"
+# Monte Carlo samples per optimisation step, stated directly. This was
+# previously MONTECARLO = 4, a multiplier against a hidden 2048 -- same number
+# of samples, but you had to know about the 2048 to read it.
+# Keep it a multiple of `chains` below (NetKet rounds up otherwise).
+N_SAMPLES = 8192   # was MONTECARLO = 4  (4 * 2048)
+seed = 0
+chains=16   # n_chains
+discard_per_chain=100   # n_discard_per_chain
+# Metropolis moves between recorded samples. -1 = NetKet default = number of
+# clusters (9 on 6x6), which gave an energy autocorrelation tau ~ 7-10 in every
+# eigenbasis run so far (the spin-basis runs have tau ~ 1).
+sweep_size = -1
+
+[distribution]
+# Importance sampling: draw from q = |psi|^alpha instead of p = |psi|^2 and
+# reweight with w = p/q. Independent of the optimizer / preconditioner.
+#
+# With auto_alpha = true this switches on the package's adaptive importance
+# sampling (VMC_NG auto_is): `alpha` is then only the STARTING exponent, and the
+# driver moves it every step along the gradient of the gradient-SNR. The tuning
+# rate lives in overdispersed_distribution.update_params. Needs on_the_fly=false.
+# notebooks/j1j2_vmc.ipynb starts the adaptive run from the Born value, 2.0.
+#
+# HELD FIXED for the shape sweep below. Adaptive alpha would retune the
+# sampling distribution separately for each architecture, so a difference in
+# final energy could come from the sampler rather than the shape; pinning it
+# keeps the four runs differing in one thing only.
+# Starting exponent 2.0 with auto_alpha ON, matching the spin-basis run.
+# Note: at FIXED alpha = 2 the eigenbasis |psi|^2 is so concentrated that
+# Metropolis acceptance collapses to 0.07 and relErr@2k is ~2x worse than at
+# alpha = 1.25 (sweep 2026-10-06_11-43-04G261eafe); adaptive alpha is expected
+# to move away from 2.0.
+alpha = 2.0
+auto_alpha = true   # true => adaptive IS; false holds alpha at the value above
+use_ntk = true   # neural tangent kernel
+on_the_fly = false
+
+[model]
+iter = 10000   # N_ITER
+layers = 4   # num_layers
+ratio = 6   # ratio: model dim : heads
+heads = 8   # n_heads
+attention_mode = "factored"   # options: 
+# Token embedding for the 16 cluster eigenstates:
+#   "learnable" -> free 16 x d_model lookup table (original behaviour)
+#   "qn"        -> learnable linear map of the physical quantum numbers
+#                  (E, Sz, S~, sigma_d, C2); 5*d_model + d_model params
+embedding = "qn"
+
+[symmetry]
+# Projection over the plaquette point group C4v, and optionally the global spin
+# flip, ON TOP OF the cluster translations that the circulant attention already
+# enforces exactly. This is Eq. (A1) of Viteritti et al. 2025.
+#
+# Every element is a SIGNED PERMUTATION of the 16 cluster eigenstates (verified
+# in helpers/symmetries.py, which raises if that ever stops holding), so each
+# group element costs an index gather -- but still one full forward pass.
+#
+# COST: |G| forward passes per sample. An empty list turns it off.
+#   []                                                  1x   off (default)
+#   ["I", "sigma_d"]                                    2x
+#   ["I", "C2", "sigma_d", "sigma_a"]                   4x   Klein four-group
+#   ["I", "C4", "C2", "C4_3",
+#    "sigma_d", "sigma_a", "sigma_x", "sigma_y"]        8x   full C4v
+# spin_flip doubles whichever of the above is chosen (valid in Sz = 0 only).
+#
+# Appendix D of the paper optimises WITHOUT symmetries first and switches them
+# on for a short final phase; at ~11.5 s/step for the 8-layer model, paying 8x
+# for a whole run is not affordable, so prefer that staged protocol.
+#
+# NOTE this changes the flax parameter tree (the network moves under a
+# submodule), so .mpack checkpoints do NOT transfer between symmetrised and
+# unsymmetrised runs. Switching it on means starting from scratch.
+elements = []
+spin_flip = false
+
+[optimizer]
+# Stochastic reconfiguration (natural gradient): optax.sgd carries the lr
+# schedule and VMC_NG solves (S + diag_shift*I) delta = F each step.
+# NOTE the lr is ~50x the ADAM-era value: SGD here is the SR step size, not a
+# first-order learning rate.
+#
+# final_learning_rate tracks the constant tau = 0.02-0.03 used in Viteritti
+# et al. 2025: with lr_transition_steps = 400 this is a short warm start at
+# 5e-2 followed by an effectively constant 2e-2. The previous 1e-3 floor left
+# 96% of the run at ~1/20 of the reference step size -- the 2026-09-15 8-layer
+# run crawled at -8.6e-6 E/step after step ~400 and Var/site stayed flat at
+# ~0.006 for 3400 steps, i.e. under-optimized rather than at a variational floor.
+initial_learning_rate = 5e-2
+final_learning_rate = 2e-2
+initial_diagonal_shift = 1e-3
+final_diagonal_shift = 1e-4
+lr_transition_steps = 400   # learning rate transition steps
+ds_transition_steps = 400   # diagonal shift transition steps.
+
+[run]
+# Graceful-stop budget. MUST stay below the active cluster's CLUSTER_WALLTIME
+# (clusters/<name>.sh), which stops the run cleanly and writes the checkpoint;
+# if it exceeds the walltime, Slurm hard-kills the job first and that window's
+# progress is lost. submit.sh now ENFORCES this and refuses to submit, so the
+# two numbers can no longer silently drift apart.
+#
+# Each profile documents the value to use here as CLUSTER_MAX_RUNTIME_MIN:
+#     aicr      b200-devel (04:00:00)  ->  230
+#               b200-batch (24:00:00)  ->  1380
+#     explorer  gpu        (04:00:00)  ->  230
+MAX_RUNTIME_MIN = 1380
+SAVE_EVERY = 50
+PRINT_EVERY = 20
+DIAG_EVERY = -1   # sampling-health diag (ESS/R-hat/acc) -> .diag.jsonl.
+                  # -1 = follow PRINT_EVERY; 0 = off.
+CHUNK_SIZE = 2048
+
+[misc]
+EXACT_SAMPLER_MAX_STATES = 200_000
+# ----------------------------------------------------------------------
+# Parameter sweep
+#
+# Section names must match the base configuration above: a key swept under
+# [sweep.optimizer] must already exist in [optimizer], or submit.sh aborts.
+#
+# [sweep.*]     -> Cartesian product (every combination)
+# [sweep_zip.*] -> zipped column-wise (specific tuples only)
+#
+# Cartesian example -- 3 x 2 = 6 runs:
+#   [sweep.system]
+#   L  = [4, 6, 8]
+#   J2 = [0.0, 0.5]
+#
+# Zipped example -- 2 runs, (5e-2, 1e-3) and (1e-2, 1e-4), NOT 4:
+#   [sweep_zip.optimizer]
+#   initial_learning_rate = [5e-2, 1e-2]
+#   initial_diagonal_shift = [1e-3, 1e-4]
+#
+# All lists in a [sweep_zip] table must be the same length. The two styles
+# can be combined: the zipped tuples are multiplied by the [sweep.*] product.
+# ----------------------------------------------------------------------
+#[sweep_zip.model]
+#embedding = ["learnable", "qn"]
+
+#[sweep.distribution]
+#lpha = [2.0, 1.6, 1.4, 1.2]
+
+#[sweep.system]
+#sign_rule = ["TF", "FF"]
+
+# Specific (lr, diag_shift) combinations -- column i becomes run_000i.
+# [sweep_zip.optimizer]
+# initial_learning_rate  = [5e-2, 5e-2, 1e-2, 1e-2]
+# initial_diagonal_shift = [1e-3, 1e-4, 1e-3, 1e-4]
+
+# [sweep_zip.optimizer]
+# final_diagonal_shift = [1e-3, 1e-4]
+
+# ----------------------------------------------------------------------
+# ISO-PARAMETER DEPTH vs WIDTH, four shapes, all under 100k parameters.
+#
+# Each run holds capacity roughly fixed (87k-100k) and spends it differently:
+# one very wide layer through eight narrow ones. Because the budget is
+# matched, a difference in final energy is attributable to SHAPE, not size.
+# This is the controlled version of open item 1 in the README ("depth
+# dominates accuracy; the reference uses 8").
+#
+#   layers  d_model  ratio  heads   params    B200 s/step   h @ iter=2000
+#        1       90      6     15   99,585           2.9            1.6
+#        2       66      6     11   98,406           4.2            2.3
+#        4       48      6      8   99,840           6.8            3.8
+#        8       32      8      4   87,520          12.0            6.7
+#
+# At iter = 2000 the first three runs each fit in ONE 4 h window and the
+# 8-layer run takes two, so the whole sweep lands inside the b200-devel cap
+# (4 h, 4 concurrent jobs) in about 7 h of wall clock. Run 2 clears the
+# 230-minute graceful stop by only ~4 minutes, so it may spill into a second
+# window if the node is slow -- harmless, it resubmits from the checkpoint.
+#
+# Parameter counts are exact (checked against the flax tree, not estimated).
+# Step times are fitted per cluster on the run history at N_SAMPLES = 8192:
+#     Explorer H200:  s/step = 0.96 + 1.32 * layers
+#     AICR     B200:  s/step = 1.59 + 1.30 * layers
+# Width is nearly free because the model is launch-bound, so depth is what
+# costs wall-clock. Note the H200 is the FASTER card here (0.86-0.89x the B200
+# step time at matched config) -- float64 and a small model mean Blackwell's
+# extra throughput buys nothing.
+#
+# MUST be sweep_zip, not sweep: the three keys move TOGETHER as four shapes.
+# Under [sweep.model] they would form a Cartesian product -- 4*4*4 = 64 runs,
+# nearly all of them off-budget.
+#
+# d_model = ratio * heads, and ratio IS d_head, which the README says to keep
+# >= 6; every row above satisfies that.
+# ----------------------------------------------------------------------
+# (submitted 2026-10-02; kept for reference)
+# [sweep_zip.model]
+# layers = [1, 2, 4, 8]
+# ratio  = [6, 6, 6, 8]
+# heads  = [15, 11, 8, 4]
+
+# ----------------------------------------------------------------------
+# MATCHED COMPARISON with the spin-basis ViT (submitted 2026-10-06, sweep
+# 2026-10-06_11-43-04G261eafe; kept for reference, no longer active).
+# Result: alpha=2 made the eigenbasis WORSE (relErr@2k 1.2e-2 vs ~7e-3 at
+# alpha=1.25; acceptance 0.07 vs 0.28), and sweep_size=36 changed nothing
+# measurable. The spin-basis ViT reaches 1.4e-5 at the same step.
+# ----------------------------------------------------------------------
+# [sweep.sampler]
+# sweep_size = [-1, 36]
+
+# ----------------------------------------------------------------------
+# ACTIVE (2026-10-07): MATCHED 6x6, J2 = 0.5 COMPARISON, spin basis vs eigenbasis
+#
+# Identical network and optimizer in both repos. Only the local basis (and each
+# basis's sampling) differs:
+#   network    4 layers, ratio 6, 8 heads (d_model 48), one token per 2x2 plaquette
+#              spin 99,792 params | eigen 99,840 (only the embedding differs)
+#   optimizer  lr 5e-2 -> 2e-2, diag shift 1e-3 -> 1e-4 (400 steps), 10,000 steps
+#   samples    8192; sign_rule "FF" (no Marshall rotation, as in all J2 = 0 runs)
+#   sampling   both: auto_alpha ON, starting from alpha = 2.0. One run per basis.
+#              (At FIXED alpha = 2 the eigenbasis Metropolis acceptance fell to
+#              0.07 at J2 = 0; adaptive alpha should move it down from there.)
+#   partition  b200-batch: 24 h windows, MAX_RUNTIME_MIN = 1380. Both bases use
+#              the same cluster profiles (clusters/):
+#                  CLUSTER=aicr-batch ./submit.sh config_eigenbasis.toml
+#              The profile is recorded in <sweep>/cluster.txt and every
+#              auto-resubmission reuses it. Without the flag submit.sh picks
+#              the devel profile and refuses (1380 min > 4 h walltime).
+# Exact reference: E0/site = -0.50381 (6x6, J2 = 0.5,
+# importance_sampling_nqs/energy_ref_litt.json).
+# The eigenbasis Hamiltonian was checked at J2 = 0.5 before this run: it
+# reproduces the exact 4x4 E0/site -0.528620 to 1e-13, and on 6x6 every
+# connected state stays in Sz = 0.
+# ----------------------------------------------------------------------

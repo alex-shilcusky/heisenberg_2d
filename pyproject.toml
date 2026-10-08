@@ -1,0 +1,19 @@
+[project]
+name = "heisenberg-j1j2"
+version = "0.1.0"
+description = "VMC for the 2D J1-J2 Heisenberg model: spin-basis and plaquette-eigenbasis ViTs"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "importance-sampling-nqs",
+    "jax[cuda]>=0.5.3",
+    "matplotlib>=3.10.9",
+]
+
+[tool.uv.sources]
+importance-sampling-nqs = { path = "../importance_sampling_nqs", editable = true }
+
+[dependency-groups]
+dev = [
+    "ipykernel>=7.3.0",
+]

@@ -1,0 +1,31 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environment
+.venv
+
+# ALL run output, both bases + diagnostics (data/spinbasis, data/eigenbasis,
+# data/diagnostics). Must stay ignored: submit.sh refuses to submit from a
+# dirty tree, so tracked-looking output would block every submission.
+data/
+
+# Slurm logs written before run.sh redirects into the run directory
+run_hist/*
+!run_hist/.gitkeep
+
+# Local debugging runs (eigenbasis)
+eigenbasis/debugging/*
+!eigenbasis/debugging/.gitkeep
+
+# Reference papers / local docs (git add -f to track one on purpose)
+docs/
+*.pdf
+
+# macOS, archives
+.DS_Store
+*.tar.gz
