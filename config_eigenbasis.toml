@@ -6,7 +6,7 @@
 basis = "eigen"   # "spin" | "eigen": selects spinbasis/ or eigenbasis/ code and data/<basis>basis/
 dimensions = 2
 L = 4
-J2 = 0.5
+J2 = 0.0
 J1 = 1.0
 sign_rule = "FF"
 transl_invariant = true
@@ -248,8 +248,8 @@ EXACT_SAMPLER_MAX_STATES = 200_000
 # ----------------------------------------------------------------------
 # ACTIVE (2026-10-08): 4x4 EXACT-SAMPLER SIZE SCAN, spin basis vs eigenbasis
 #
-# 4 widths x J2 in {0, 0.5} = 8 runs, matched one-to-one with the 8 runs of
-# config_spinbasis.toml (same widths, same order). Everything else is the
+# 4 widths at J2 = 0 = 4 runs, matched one-to-one with the 4 runs of
+# config_spinbasis.toml (same widths, same order: run_0000 = XS ... run_0003 = L). Everything else is the
 # base config above: 2 layers, exact sampler (no Markov chain, so the
 # eigenbasis acceptance problem is out of the picture), auto_alpha on from
 # alpha = 2.0, 8192 samples, b200-devel.
@@ -260,15 +260,14 @@ EXACT_SAMPLER_MAX_STATES = 200_000
 #     M         72     12      6              116,736
 #     L         96     16      6              206,336
 #
-# Exact 4x4 references (the driver also prints them):
-#   J2 = 0    E0/site = -0.701780
-#   J2 = 0.5  E0/site = -0.528620
+# Exact 4x4 reference (the driver also prints it): E0/site = -0.701780.
+# J2 = 0.5 (E0/site = -0.528620) is deferred: add back
+#   [sweep.system]
+#   J2 = [0.0, 0.5]
+# to run both (8 runs).
 #
 # Submit (devel, 4 h windows; MAX_RUNTIME_MIN = 230):
 #   ./submit.sh config_eigenbasis.toml
 # ----------------------------------------------------------------------
-[sweep.system]
-J2 = [0.0, 0.5]
-
 [sweep_zip.model]
 heads = [4, 8, 12, 16]
