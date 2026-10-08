@@ -247,10 +247,16 @@ EXACT_SAMPLER_MAX_STATES = 200_000
 # not a confound), auto_alpha on from alpha = 2.0, 8192 samples, b200-devel.
 #
 #   width   d_model  heads  (d_head 6)   params
-#     XS        24      4                13,544
-#     S         48      8                52,432
-#     M         72     12               116,664
-#     L         96     16               206,240
+#     XS         6      1                 1,010
+#     S         12      2                 3,604
+#     M         24      4                13,544
+#     L         48      8                52,432
+#
+# The sizes straddle the Sz=0 sector size, 12,870 states: two below, one at
+# it, one above (enough to memorize; tests trainability only). On 6x6 the
+# sector is ~1e10, so every network there has to compress. Parameter count vs
+# dimension is only a rough guide: the enforced patch translations leave
+# ~3,200 orbits, and the ground state's full symmetry fewer still.
 #
 # Exact 4x4 reference (the driver also prints it): E0/site = -0.701780.
 # J2 = 0.5 (E0/site = -0.528620) is deferred: add back
@@ -262,5 +268,5 @@ EXACT_SAMPLER_MAX_STATES = 200_000
 #   ./submit.sh config_spinbasis.toml
 # ----------------------------------------------------------------------
 [sweep_zip.model.vit]
-d_model = [24, 48, 72, 96]
-n_heads = [4, 8, 12, 16]
+d_model = [6, 12, 24, 48]
+n_heads = [1, 2, 4, 8]
