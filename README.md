@@ -19,7 +19,7 @@ unchanged (on GitHub too) as the record of everything run before 2026-10-08.
 ## Layout
 
 ```
-heisenberg_j1j2/
+heisenberg_2d/
 ├── submit.sh                 login node: validate, expand sweep, sbatch
 ├── run.sh                    per-task Slurm script, dispatches on the basis (+ auto-resubmit)
 ├── config_spinbasis.toml     spin-basis base config + sweeps
@@ -47,7 +47,7 @@ dependency (see `pyproject.toml`).
 ## Setup (once per machine)
 
 ```bash
-cd ~/master/heisenberg_j1j2
+cd ~/master/heisenberg_2d
 uv sync --python 3.13          # 3.14 has no wheels for this lockfile
 ```
 

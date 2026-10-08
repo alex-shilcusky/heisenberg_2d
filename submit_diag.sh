@@ -6,7 +6,7 @@
 # plaquette eigenbasis, in the eigenbasis with the exact signs supplied, and
 # with several eigenbasis network variants (see sign_diagnostics_4x4.py).
 #
-# USAGE (login node, from the heisenberg_j1j2 checkout):
+# USAGE (login node, from the heisenberg_2d checkout):
 #
 #     ./submit_diag.sh                       # sign diagnostics (default)
 #     DIAG=learned_basis ./submit_diag.sh    # learned local basis (learned_basis_4x4.py)
@@ -19,7 +19,7 @@
 #
 # EVERYTHING lands in ONE folder, printed at submission:
 #
-#     heisenberg_j1j2/data/diagnostics/<sign_4x4|learned_basis_4x4>/<YYYY-MM-DD_HH-MM-SS>G<commit>/
+#     heisenberg_2d/data/diagnostics/<sign_4x4|learned_basis_4x4>/<YYYY-MM-DD_HH-MM-SS>G<commit>/
 #         STATUS                 queued -> running -> done | failed (exit N)
 #         submit_info.txt        commit, cluster, resources, the exact command
 #         slurm-<jobid>.out/.err full job log (the tables appear here live)

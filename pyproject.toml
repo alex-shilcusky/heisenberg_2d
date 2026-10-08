@@ -1,5 +1,5 @@
 [project]
-name = "heisenberg-j1j2"
+name = "heisenberg-2d"
 version = "0.1.0"
 description = "VMC for the 2D J1-J2 Heisenberg model: spin-basis and plaquette-eigenbasis ViTs"
 readme = "README.md"

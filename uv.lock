@@ -10,7 +10,7 @@ resolution-markers = [
 ]
 
 [[package]]
-name = "heisenberg-j1j2"
+name = "heisenberg-2d"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [

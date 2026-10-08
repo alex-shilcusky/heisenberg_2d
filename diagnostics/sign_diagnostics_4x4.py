@@ -56,7 +56,7 @@ import jax.numpy as jnp
 import optax
 
 HERE = os.path.dirname(os.path.abspath(__file__))              # diagnostics/
-REPO = os.path.dirname(HERE)                                     # heisenberg_j1j2/
+REPO = os.path.dirname(HERE)                                     # heisenberg_2d/
 EIGEN_DIR = os.path.join(REPO, "eigenbasis")
 SPIN_DIR = os.path.join(REPO, "spinbasis")
 L, C, NS = 4, 2, 16                   # 4x4 lattice, 2x2 grid of 2x2 plaquettes
