@@ -12,7 +12,9 @@ basis = "spin"        # "spin" | "eigen": selects spinbasis/ or eigenbasis/ code
 L = 4                 # L x L periodic square lattice, N = L^2 spins
 J1 = 1.0
 J2 = 0.0
-sign_rule = "FF"      # Marshall sign rule per [J1, J2] bond family, T/F each
+sign_rule = "TF"      # Marshall sign rule per [J1, J2] bond family, T/F each.
+                      # "TF" = Marshall-rotated: the J2 = 0 ground state is positive,
+                      # which the real-weight GCNN below needs. (ViT runs used "FF".)
 
 [sampler]
 SAMPLER = "exact"     # "auto" (exact if the Sz=0 sector <= EXACT_SAMPLER_MAX_STATES) | "exact" | "metro"
@@ -36,7 +38,7 @@ on_the_fly = false
 
 [model]
 iter = 5000           # N_ITER (total across resubmissions)
-type = "vit"          # "jastrow" | "rbm" | "vit" -- selects the [model.<type>] table
+type = "gcnn"         # "jastrow" | "rbm" | "vit" | "gcnn" -- selects the [model.<type>] table
 
 [model.vit]
 # The tutorial's spin-basis ViT (factored attention). Real parameters, complex
@@ -48,6 +50,23 @@ d_model = 48                  # = ratio 6 * 8 heads, matching the eigenbasis run
 n_heads = 8
 patch_size = 2
 transl_invariant = true
+
+[model.gcnn]
+# NetKet's group-convolutional network (Roth & MacDonald 2021). Exactly
+# invariant under the whole space group: all L^2 single-site translations x C4v
+# (|G| = 128 on 4x4), unlike the ViT's patch translations only. The default
+# characters (all +1) select the fully symmetric sector; parity = +1 adds the
+# spin flip. ED on 4x4 (J2 = 0 and 0.5, FF and TF) puts the ground state
+# exactly there: every chi(g) = +1, spin-flip parity +1, nondegenerate.
+# float64 weights make log psi real, i.e. psi > 0: needs sign_rule = "TF" at
+# J2 = 0. At J2 = 0.5 the Marshall rule no longer fixes every sign: use
+# param_dtype = "complex128" there.
+# Params (4x4, parity +1) = 2 x (F*N + F + F^2*|G| + F): grows with F^2*|G|.
+layers = 2
+features = 2                  # channels per layer (int, or a list per layer)
+symmetries = "space_group"    # "space_group" (translations x C4v) | "translation"
+parity = 1                    # spin-flip eigenvalue: +1, -1, or 0 = off
+param_dtype = "float64"       # "float64" (needs TF at J2 = 0) | "complex128"
 
 # ----------------------------------------------------------------------
 # Other wavefunctions. Only the table named by [model] type is used, and
@@ -239,7 +258,7 @@ EXACT_SAMPLER_MAX_STATES = 200_000
 # ----------------------------------------------------------------------
 
 # ----------------------------------------------------------------------
-# ACTIVE (2026-10-08): 4x4 EXACT-SAMPLER SIZE SCAN, spin basis vs eigenbasis
+# (submitted 2026-10-09 as commit def726f; kept for reference) 4x4 EXACT-SAMPLER SIZE SCAN, spin basis vs eigenbasis
 #
 # 4 widths at J2 = 0 = 4 runs, matched one-to-one with the 4 runs of
 # config_eigenbasis.toml (same widths, same order: run_0000 = XS ... run_0003 = L). Everything else is the
@@ -267,9 +286,30 @@ EXACT_SAMPLER_MAX_STATES = 200_000
 #   J2 = [0.0, 0.5]
 # to run both (8 runs).
 #
+# To rerun: set [system] sign_rule = "FF", [model] type = "vit", and restore
+#   [sweep_zip.model.vit]
+#   d_model = [6, 12, 24, 48]
+#   n_heads = [1, 2, 4, 8]
+# ----------------------------------------------------------------------
+
+# ----------------------------------------------------------------------
+# ACTIVE (2026-10-09): 4x4 SIZE SCAN, GCNN in the Marshall frame
+#
+# The ViT size scan above, with the ViT replaced by NetKet's GCNN: same
+# 4x4, J2 = 0, exact sampler, 8192 samples, FIXED alpha = 2.0, optimizer and
+# 5000 steps; 2 layers like the ViT. Differences: sign_rule = "TF" (real
+# weights, positive psi) and the full space group + spin flip built in.
+#
+#   run       features   params   (ViT run with the closest count)
+#   run_0000      2       1,062    d_model 6:   1,010
+#   run_0001      4       4,172    d_model 12:  3,604
+#   run_0002      8      16,536    d_model 24: 13,544
+#   run_0003     14      50,442    d_model 48: 52,432
+#
+# Exact 4x4 reference: E0/site = -0.701780 (sign_rule does not change it).
+#
 # Submit (devel, 4 h windows; MAX_RUNTIME_MIN = 230):
 #   ./submit.sh config_spinbasis.toml
 # ----------------------------------------------------------------------
-[sweep_zip.model.vit]
-d_model = [6, 12, 24, 48]
-n_heads = [1, 2, 4, 8]
+[sweep_zip.model.gcnn]
+features = [2, 4, 8, 14]

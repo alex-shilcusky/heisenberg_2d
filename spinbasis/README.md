@@ -14,7 +14,7 @@ formats with `../eigenbasis`. Energies are in S = sigma/2 units in both.
 spinbasis/
 ├── run_2D_spinbasis.py    entry point: builds H, model, driver; runs VMC
 └── helpers/
-    ├── wavefunctions.py   [model] config -> Flax module (jastrow | rbm | vit)
+    ├── wavefunctions.py   [model] config -> Flax module (jastrow | rbm | vit | gcnn)
     └── vit.py             the tutorial's spin-basis ViT
 ```
 

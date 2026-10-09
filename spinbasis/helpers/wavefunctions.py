@@ -2,9 +2,9 @@
 Wavefunction factory: turns the [model] section of the config into a Flax module.
 
     [model]
-    type = "jastrow" | "rbm" | "vit"
+    type = "jastrow" | "rbm" | "vit" | "gcnn"
 
-and each type reads its own subtable, [model.jastrow], [model.rbm] or
+and each type reads its own subtable, [model.jastrow], [model.rbm], [model.gcnn] or
 [model.vit]. All three subtables live in the base config at once, so a sweep
 over `model.type` works without editing anything else; the subtables of the
 types that are not selected are simply ignored.
@@ -19,7 +19,7 @@ from flax import linen as nn
 
 from helpers.vit import ViT
 
-MODEL_TYPES = ("jastrow", "rbm", "vit")
+MODEL_TYPES = ("jastrow", "rbm", "vit", "gcnn")
 
 _DTYPES = {"float64": jnp.float64, "complex128": jnp.complex128}
 _SYMMETRIES = ("none", "translation", "space_group")
@@ -101,6 +101,31 @@ def build_model(model_cfg, graph, L):
                        f"symmetries={symm_name} |G|={len(group)}, "
                        f"param_dtype={dtype.__name__}, init_std={std}, visible bias "
                        f"{'dropped (identically 0 at Sz=0)' if use_vb else 'off'})")
+
+    if kind == "gcnn":
+        # Group-convolutional network (Roth & MacDonald 2021): exactly invariant
+        # under the chosen group, single-site translations included. Default
+        # characters (all +1) select the fully symmetric sector, which is where
+        # the 4x4 ground state lies at J2 = 0 and 0.5 (checked by ED, both sign
+        # rules). With param_dtype = "float64" log psi is real, so psi > 0: use
+        # sign_rule = "TF" (Marshall), whose J2 = 0 ground state is single-signed.
+        layers = int(sub["layers"])
+        features = sub["features"]
+        features = int(features) if isinstance(features, (int, float)) else tuple(int(f) for f in features)
+        dtype = _dtype(sub.get("param_dtype", "float64"), table)
+        symm_name = sub.get("symmetries", "space_group")
+        if symm_name == "none":
+            raise ValueError(f"[{table}] symmetries must be 'translation' or 'space_group'.")
+        group = _symmetry_group(symm_name, graph, table)
+        parity = int(sub.get("parity", 0))
+        if parity not in (-1, 0, 1):
+            raise ValueError(f"[{table}] parity must be +1, -1 or 0 (off), got {parity}.")
+        # Passing the graph (not the group) lets NetKet use its FFT over translations.
+        model = nk.models.GCNN(symmetries=graph if symm_name == "space_group" else group,
+                               layers=layers, features=features, param_dtype=dtype,
+                               parity=parity or None, complex_output=True)
+        return model, (f"GCNN(layers={layers}, features={features}, symmetries={symm_name} "
+                       f"|G|={len(group)}, parity={parity or 'off'}, param_dtype={dtype.__name__})")
 
     # vit
     num_layers = int(sub["num_layers"])
