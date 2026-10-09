@@ -9,15 +9,15 @@
 
 [system]
 basis = "spin"        # "spin" | "eigen": selects spinbasis/ or eigenbasis/ code and data/<basis>basis/
-L = 6                 # L x L periodic square lattice, N = L^2 spins
+L = 4                 # L x L periodic square lattice, N = L^2 spins
 J1 = 1.0
-J2 = 0.0
+J2 = 0.5
 sign_rule = "FF"      # Marshall sign rule per [J1, J2] bond family, T/F each.
                       # "TF" = Marshall-rotated: the J2 = 0 ground state is positive,
                       # which the real-weight GCNN below needs. ViT runs use "FF".
 
 [sampler]
-SAMPLER = "auto"      # "auto" (exact if the Sz=0 sector <= EXACT_SAMPLER_MAX_STATES) | "exact" | "metro"
+SAMPLER = "exact"     # "auto" (exact if the Sz=0 sector <= EXACT_SAMPLER_MAX_STATES) | "exact" | "metro"
 MONTECARLO = 4        # N_samples = 2048 * MONTECARLO
 seed = 0
 chains = 16           # n_chains (metro only)
@@ -37,7 +37,7 @@ use_ntk = true        # neural tangent kernel
 on_the_fly = false
 
 [model]
-iter = 10000          # N_ITER (total across resubmissions)
+iter = 5000           # N_ITER (total across resubmissions)
 type = "vit"          # "jastrow" | "rbm" | "vit" | "gcnn" -- selects the [model.<type>] table
 
 [model.vit]
@@ -132,7 +132,7 @@ ds_transition_steps = 400
 # Graceful-stop budget. MUST stay below --time in run.sh:
 #     b200-devel (--time=04:00:00)  ->  230
 #     b200-batch (--time=24:00:00)  ->  1380
-MAX_RUNTIME_MIN = 1380
+MAX_RUNTIME_MIN = 230
 SAVE_EVERY = 50       # checkpoint (+ .progress) and log-flush interval
 PRINT_EVERY = 20
 DIAG_EVERY = -1       # sampling-health diag -> .diag.jsonl; -1 = PRINT_EVERY, 0 = off
@@ -316,7 +316,7 @@ EXACT_SAMPLER_MAX_STATES = 200_000
 # ----------------------------------------------------------------------
 
 # ----------------------------------------------------------------------
-# ACTIVE (2026-10-09): 6x6 SPIN-BASIS RUNS MATCHED TO THE EIGENBASIS RUNS
+# (submitted 2026-10-09 as 8b47bde; kept for reference) 6x6 SPIN-BASIS RUNS MATCHED TO THE EIGENBASIS RUNS
 #
 # Same ViT shapes as the 6x6 eigenbasis runs at J2 = 0, so the parameter
 # counts match (only the embedding differs). The spin basis already has the
@@ -339,8 +339,61 @@ EXACT_SAMPLER_MAX_STATES = 200_000
 #
 # Submit (b200-batch, 24 h windows; MAX_RUNTIME_MIN = 1380):
 #   CLUSTER=aicr-batch ./submit.sh config_spinbasis.toml
+# To rerun: L = 6, J2 = 0.0, SAMPLER = "auto", iter = 10000,
+# MAX_RUNTIME_MIN = 1380, and restore
+#   [sweep_zip.model.vit]
+#   num_layers = [1, 2, 4, 8, 8]
+#   d_model    = [90, 66, 48, 32, 72]
+#   n_heads    = [15, 11, 8, 4, 12]
 # ----------------------------------------------------------------------
+
+# ----------------------------------------------------------------------
+# ACTIVE (2026-10-09): 4x4, J2 = 0.5 -- FOUR SPIN-BASIS TESTS IN ONE SWEEP
+#
+# 4x4, J2 = 0.5 (E0/site = -0.528620), exact sampler, 8192 samples,
+# 2 layers, lr 5e-2 -> 2e-2, diag shift 1e-3 -> 1e-4, 5000 steps. Base
+# alpha = 2.0. Columns are zipped: column i -> run_000i. Runs that two tests
+# share (FF, fixed alpha, d = 24 / 48) appear once.
+#
+#   run  test                     model  sign  alpha     size
+#    0   1 size scan              ViT    FF    fixed 2   d12 h2   (3.6k)
+#    1   1 size scan / 2 / 4      ViT    FF    fixed 2   d24 h4   (13.5k)
+#    2   1 size scan / 2 / 4      ViT    FF    fixed 2   d48 h8   (52k)
+#    3   1 size scan              ViT    FF    fixed 2   d72 h12  (117k)
+#    4   2 Marshall frame         ViT    TF    fixed 2   d24 h4
+#    5   2 Marshall frame         ViT    TF    fixed 2   d48 h8
+#    6   4 adaptive alpha         ViT    FF    adaptive  d24 h4
+#    7   4 adaptive alpha         ViT    FF    adaptive  d48 h8
+#    8   3 GCNN, real weights     GCNN   TF    fixed 2   features 4  (4.2k)
+#    9   3 GCNN, real weights     GCNN   TF    fixed 2   features 8  (16.5k)
+#   10   3 GCNN, complex weights  GCNN   FF    fixed 2   features 4
+#   11   3 GCNN, complex weights  GCNN   FF    fixed 2   features 8
+#
+# Questions: (1) does the spin basis keep its lead over the eigenbasis at the
+# frustrated point (compare config_eigenbasis.toml's matching scan)? (2) does
+# starting in the Marshall frame help when the rule is only ~99% right?
+# (3) real GCNN = what Marshall alone misses; complex GCNN = full symmetry with
+# learned signs vs the ViT. (4) does adaptive alpha still beat fixed?
+# The ViT keys in GCNN columns (and vice versa) are placeholders: submit.sh
+# drops the unused model table from each run.
+#
+# Submit on Explorer (gpu partition, 4 h windows; MAX_RUNTIME_MIN = 230):
+#   CLUSTER=explorer ./submit.sh config_spinbasis.toml
+# ----------------------------------------------------------------------
+[sweep_zip.system]
+sign_rule = ["FF", "FF", "FF", "FF", "TF", "TF", "FF", "FF", "TF", "TF", "FF", "FF"]
+
+[sweep_zip.distribution]
+auto_alpha = [false, false, false, false, false, false, true, true, false, false, false, false]
+
+[sweep_zip.model]
+type = ["vit", "vit", "vit", "vit", "vit", "vit", "vit", "vit", "gcnn", "gcnn", "gcnn", "gcnn"]
+
 [sweep_zip.model.vit]
-num_layers = [1, 2, 4, 8, 8]
-d_model    = [90, 66, 48, 32, 72]
-n_heads    = [15, 11, 8, 4, 12]
+d_model = [12, 24, 48, 72, 24, 48, 24, 48, 48, 48, 48, 48]
+n_heads = [2, 4, 8, 12, 4, 8, 4, 8, 8, 8, 8, 8]
+
+[sweep_zip.model.gcnn]
+features    = [4, 4, 4, 4, 4, 4, 4, 4, 4, 8, 4, 8]
+param_dtype = ["float64", "float64", "float64", "float64", "float64", "float64",
+               "float64", "float64", "float64", "float64", "complex128", "complex128"]

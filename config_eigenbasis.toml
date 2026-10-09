@@ -6,7 +6,7 @@
 basis = "eigen"   # "spin" | "eigen": selects spinbasis/ or eigenbasis/ code and data/<basis>basis/
 dimensions = 2
 L = 4
-J2 = 0.0
+J2 = 0.5
 J1 = 1.0
 sign_rule = "FF"
 transl_invariant = true
@@ -280,7 +280,7 @@ EXACT_SAMPLER_MAX_STATES = 200_000
 # ----------------------------------------------------------------------
 
 # ----------------------------------------------------------------------
-# ACTIVE (2026-10-09): 4x4 WITH THE 6x6 BASELINE SETTINGS -- one run
+# (submitted 2026-10-09 as beb1714; kept for reference) 4x4 WITH THE 6x6 BASELINE SETTINGS -- one run
 #
 # Is the 4x4 eigenbasis worse than 6x6 because of the lattice (only 4
 # plaquette tokens on a 2x2 periodic grid: each plaquette's left and right
@@ -295,6 +295,32 @@ EXACT_SAMPLER_MAX_STATES = 200_000
 #   stuck at a few %  -> the 2x2 token grid is a bad case for the eigenbasis ViT.
 # Exact 4x4 reference: E0/site = -0.701780.
 #
-# Submit (devel, 4 h window; MAX_RUNTIME_MIN = 230):
-#   ./submit.sh config_eigenbasis.toml
+# To rerun: J2 = 0.0 and delete the sweep tables below (heads = 12, alpha = 1.25).
 # ----------------------------------------------------------------------
+
+# ----------------------------------------------------------------------
+# ACTIVE (2026-10-09): 4x4, J2 = 0.5 -- EIGENBASIS SIZE SCAN x ALPHA, 8 runs
+#
+# Matches test 1 of config_spinbasis.toml (same sizes, same J2 = 0.5, exact
+# sampler, 8192 samples, 2 layers, ratio 6, optimizer, 5000 steps), at both
+# fixed alpha = 1.25 (the 6x6 eigenbasis setting) and 2.0 (the spin setting),
+# so the comparison does not wait on the J2 = 0 baseline test.
+#
+#   heads  d_model  params      alpha = [1.25, 2.0]  (Cartesian product)
+#     2      12      3.6k
+#     4      24     13.6k
+#     8      48     52k
+#    12      72    117k
+#   run order: alpha alternates within each size -- run_0000 / 0001 = heads 2 at
+#   alpha 1.25 / 2.0, run_0002 / 0003 = heads 4, ..., run_0006 / 0007 = heads 12
+#
+# Exact 4x4 reference: E0/site = -0.528620.
+#
+# Submit on Explorer (gpu partition, 4 h windows; MAX_RUNTIME_MIN = 230):
+#   CLUSTER=explorer ./submit.sh config_eigenbasis.toml
+# ----------------------------------------------------------------------
+[sweep.distribution]
+alpha = [1.25, 2.0]
+
+[sweep_zip.model]
+heads = [2, 4, 8, 12]
