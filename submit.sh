@@ -593,11 +593,49 @@ elif [[ "$((CONFIG_MAX_RUNTIME * 2))" -lt "$WALL_MIN" ]]; then
 fi
 
 # --------------------------------------------------------------------------
-# Confirmation.
+# Which runs to submit now.
+#
+# ARRAY=0-7 ./submit.sh ...   submits only those runs (Slurm --array syntax:
+# ranges and commas). Every array task counts against a per-user submit
+# limit (Explorer: 8), so a bigger sweep goes in pieces: the whole sweep
+# folder is created now, and the rest is submitted later into the SAME folder
+# with ./submit_more.sh <sweep-dir> <range>.
 # --------------------------------------------------------------------------
 
+ARRAY_SPEC="${ARRAY:-0-$((NUM_RUNS - 1))}"
+read -r N_SUBMIT REMAINING < <(python - "$ARRAY_SPEC" "$NUM_RUNS" <<'PY'
+import re, sys
+spec, n = sys.argv[1], int(sys.argv[2])
+ids = set()
+for part in spec.split(","):
+    m = re.fullmatch(r"(\d+)(?:-(\d+))?", part.strip())
+    if not m:
+        sys.exit(f"ERROR: ARRAY={spec!r}: use ranges and commas, e.g. 0-7 or 0-3,8")
+    a, b = int(m.group(1)), int(m.group(2) or m.group(1))
+    if a > b or b >= n:
+        sys.exit(f"ERROR: ARRAY={spec!r}: this sweep has runs 0-{n - 1}")
+    ids.update(range(a, b + 1))
+rest = sorted(set(range(n)) - ids)
+def ranges(v):
+    out, i = [], 0
+    while i < len(v):
+        j = i
+        while j + 1 < len(v) and v[j + 1] == v[j] + 1:
+            j += 1
+        out.append(str(v[i]) if i == j else f"{v[i]}-{v[j]}")
+        i = j + 1
+    return ",".join(out)
+print(len(ids), ranges(rest) or "-")
+PY
+)
+[[ -n "${N_SUBMIT:-}" ]] || exit 1
+
 if [[ "$NUM_RUNS" -gt 1 ]]; then
-    echo "This will submit a Slurm job array with $NUM_RUNS $BASIS-basis tasks ($JOB_NAME) to $CLUSTER_NAME."
+    echo "This will submit a Slurm job array with $N_SUBMIT of $NUM_RUNS $BASIS-basis tasks ($JOB_NAME) to $CLUSTER_NAME."
+    echo "Array: $ARRAY_SPEC"
+    if [[ "$REMAINING" != "-" ]]; then
+        echo "Not submitted now: runs $REMAINING (later: ./submit_more.sh <sweep-dir> $REMAINING)"
+    fi
 else
     echo "This will submit one $BASIS-basis Slurm job ($JOB_NAME) to $CLUSTER_NAME."
 fi
@@ -627,7 +665,7 @@ if ! sbatch \
     --test-only \
     "${CLUSTER_SBATCH_ARGS[@]}" \
     --job-name="$JOB_NAME" \
-    --array="0-$((NUM_RUNS - 1))" \
+    --array="$ARRAY_SPEC" \
     run.sh \
     "$MATRIX" \
     "$SWEEP_DIR"
@@ -655,7 +693,7 @@ JOB_ID="$(
         --parsable \
         "${CLUSTER_SBATCH_ARGS[@]}" \
         --job-name="$JOB_NAME" \
-        --array="0-$((NUM_RUNS - 1))" \
+        --array="$ARRAY_SPEC" \
         run.sh \
         "$MATRIX" \
         "$SWEEP_DIR"
@@ -669,9 +707,14 @@ echo "============================================================"
 echo "Slurm job ID: $JOB_ID"
 echo "Sweep ID:     $SWEEP_ID"
 echo "Basis:        $BASIS"
-echo "Runs:         $NUM_RUNS"
+echo "Runs:         $NUM_RUNS (submitted: $ARRAY_SPEC)"
 echo "Output:       $SWEEP_DIR"
 echo
+if [[ "$REMAINING" != "-" ]]; then
+    echo "Still to submit: runs $REMAINING. When queue slots free up:"
+    echo "  ./submit_more.sh ${SWEEP_DIR#"$REPO_ROOT"/} $REMAINING"
+    echo
+fi
 echo "Monitor with:"
 echo "  squeue --array -j $JOB_ID"
 echo

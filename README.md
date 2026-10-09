@@ -24,6 +24,7 @@ heisenberg_2d/
 ├── run.sh                    per-task Slurm script, dispatches on the basis (+ auto-resubmit)
 ├── config_spinbasis.toml     spin-basis base config + sweeps
 ├── config_eigenbasis.toml    eigenbasis base config + sweeps
+├── submit_more.sh            submit the rest of a sweep (per-user job limits)
 ├── submit_branch.sh          continue a finished run into a new folder
 ├── branch_run.py             (the work behind submit_branch.sh)
 ├── submit_diag.sh            4x4 exact-state diagnostics on a GPU
@@ -78,6 +79,15 @@ uses; the other wave functions are commented templates in the file. Sweeping
 `model.type` needs each swept type's table present, but `submit.sh` drops the
 unselected tables from every run, so `config.json`, `manifest.json` and
 `matrix.json` only ever show the model that ran.
+
+**Job limits.** Every array task counts as a job. Where the queue is capped
+(Explorer: 8 per user), submit part of a sweep and add the rest later into the
+same sweep folder:
+
+```bash
+ARRAY=0-7 CLUSTER=explorer ./submit.sh config_spinbasis.toml
+./submit_more.sh data/spinbasis/<sweep-id> 8-11
+```
 
 ### Monitoring
 
