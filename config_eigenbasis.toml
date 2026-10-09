@@ -46,7 +46,7 @@ sweep_size = -1
 # alpha = 1.25 (sweep 2026-10-06_11-43-04G261eafe); adaptive alpha is expected
 # to move away from 2.0.
 alpha = 2.0
-auto_alpha = true   # true => adaptive IS; false holds alpha at the value above
+auto_alpha = false  # FIXED alpha (true => adaptive IS, alpha above is only the start)
 use_ntk = true   # neural tangent kernel
 on_the_fly = false
 
@@ -251,8 +251,10 @@ EXACT_SAMPLER_MAX_STATES = 200_000
 # 4 widths at J2 = 0 = 4 runs, matched one-to-one with the 4 runs of
 # config_spinbasis.toml (same widths, same order: run_0000 = XS ... run_0003 = L). Everything else is the
 # base config above: 2 layers, exact sampler (no Markov chain, so the
-# eigenbasis acceptance problem is out of the picture), auto_alpha on from
-# alpha = 2.0, 8192 samples, b200-devel.
+# eigenbasis acceptance problem is out of the picture), FIXED alpha = 2.0
+# (auto_alpha off: plain SR, all importance weights 1), 8192 samples, b200-devel.
+# CONTROL for the adaptive-alpha sweeps 2026-10-08_19-28-13Gd773272 (spin) and
+# 2026-10-08_19-28-24Gd773272 (eigen): identical except alpha is fixed.
 #
 #   width   d_model  heads  ratio (= d_head)   params
 #     XS         6      1      6                1,016

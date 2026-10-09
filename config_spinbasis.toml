@@ -30,7 +30,7 @@ d_max = 2             # MetropolisExchange: swap spins up to graph distance d_ma
 # it every step. Needs on_the_fly = false and a complex-output wavefunction
 # (the ViT always; RBM / Jastrow with param_dtype = "complex128").
 alpha = 2.0
-auto_alpha = true     # adaptive; alpha above is the STARTING exponent
+auto_alpha = false    # FIXED alpha (true => adaptive; alpha above is then the STARTING exponent)
 use_ntk = true        # neural tangent kernel
 on_the_fly = false
 
@@ -244,7 +244,10 @@ EXACT_SAMPLER_MAX_STATES = 200_000
 # 4 widths at J2 = 0 = 4 runs, matched one-to-one with the 4 runs of
 # config_eigenbasis.toml (same widths, same order: run_0000 = XS ... run_0003 = L). Everything else is the
 # base config above: 2 layers, exact sampler (no Markov chain, so sampling is
-# not a confound), auto_alpha on from alpha = 2.0, 8192 samples, b200-devel.
+# not a confound), FIXED alpha = 2.0 (auto_alpha off: plain SR, all importance
+# weights 1), 8192 samples, b200-devel.
+# CONTROL for the adaptive-alpha sweeps 2026-10-08_19-28-13Gd773272 (spin) and
+# 2026-10-08_19-28-24Gd773272 (eigen): identical except alpha is fixed.
 #
 #   width   d_model  heads  (d_head 6)   params
 #     XS         6      1                 1,010
