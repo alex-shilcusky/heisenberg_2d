@@ -9,15 +9,15 @@
 
 [system]
 basis = "spin"        # "spin" | "eigen": selects spinbasis/ or eigenbasis/ code and data/<basis>basis/
-L = 4                 # L x L periodic square lattice, N = L^2 spins
+L = 6                 # L x L periodic square lattice, N = L^2 spins
 J1 = 1.0
 J2 = 0.0
-sign_rule = "TF"      # Marshall sign rule per [J1, J2] bond family, T/F each.
+sign_rule = "FF"      # Marshall sign rule per [J1, J2] bond family, T/F each.
                       # "TF" = Marshall-rotated: the J2 = 0 ground state is positive,
-                      # which the real-weight GCNN below needs. (ViT runs used "FF".)
+                      # which the real-weight GCNN below needs. ViT runs use "FF".
 
 [sampler]
-SAMPLER = "exact"     # "auto" (exact if the Sz=0 sector <= EXACT_SAMPLER_MAX_STATES) | "exact" | "metro"
+SAMPLER = "auto"      # "auto" (exact if the Sz=0 sector <= EXACT_SAMPLER_MAX_STATES) | "exact" | "metro"
 MONTECARLO = 4        # N_samples = 2048 * MONTECARLO
 seed = 0
 chains = 16           # n_chains (metro only)
@@ -37,8 +37,8 @@ use_ntk = true        # neural tangent kernel
 on_the_fly = false
 
 [model]
-iter = 5000           # N_ITER (total across resubmissions)
-type = "gcnn"         # "jastrow" | "rbm" | "vit" | "gcnn" -- selects the [model.<type>] table
+iter = 10000          # N_ITER (total across resubmissions)
+type = "vit"          # "jastrow" | "rbm" | "vit" | "gcnn" -- selects the [model.<type>] table
 
 [model.vit]
 # The tutorial's spin-basis ViT (factored attention). Real parameters, complex
@@ -132,7 +132,7 @@ ds_transition_steps = 400
 # Graceful-stop budget. MUST stay below --time in run.sh:
 #     b200-devel (--time=04:00:00)  ->  230
 #     b200-batch (--time=24:00:00)  ->  1380
-MAX_RUNTIME_MIN = 230
+MAX_RUNTIME_MIN = 1380
 SAVE_EVERY = 50       # checkpoint (+ .progress) and log-flush interval
 PRINT_EVERY = 20
 DIAG_EVERY = -1       # sampling-health diag -> .diag.jsonl; -1 = PRINT_EVERY, 0 = off
@@ -293,7 +293,7 @@ EXACT_SAMPLER_MAX_STATES = 200_000
 # ----------------------------------------------------------------------
 
 # ----------------------------------------------------------------------
-# ACTIVE (2026-10-09): 4x4 SIZE SCAN, GCNN in the Marshall frame
+# (committed as e8380f1, for Explorer; kept for reference) 4x4 SIZE SCAN, GCNN in the Marshall frame
 #
 # The ViT size scan above, with the ViT replaced by NetKet's GCNN: same
 # 4x4, J2 = 0, exact sampler, 8192 samples, FIXED alpha = 2.0, optimizer and
@@ -308,8 +308,39 @@ EXACT_SAMPLER_MAX_STATES = 200_000
 #
 # Exact 4x4 reference: E0/site = -0.701780 (sign_rule does not change it).
 #
-# Submit (devel, 4 h windows; MAX_RUNTIME_MIN = 230):
-#   ./submit.sh config_spinbasis.toml
+# To run it, submit from that commit (`git checkout e8380f1`), or set L = 4,
+# sign_rule = "TF", SAMPLER = "exact", iter = 5000, type = "gcnn",
+# MAX_RUNTIME_MIN = 230 and restore
+#   [sweep_zip.model.gcnn]
+#   features = [2, 4, 8, 14]
 # ----------------------------------------------------------------------
-[sweep_zip.model.gcnn]
-features = [2, 4, 8, 14]
+
+# ----------------------------------------------------------------------
+# ACTIVE (2026-10-09): 6x6 SPIN-BASIS RUNS MATCHED TO THE EIGENBASIS RUNS
+#
+# Same ViT shapes as the 6x6 eigenbasis runs at J2 = 0, so the parameter
+# counts match (only the embedding differs). The spin basis already has the
+# L2 d72 h12 baseline (2026-09-28_15-04-11/run_0003, 116,784 params, 6.2e-6).
+#
+#   run       layers d_model heads   params spin / eigen   eigenbasis run(s) matched
+#   run_0000     1     90     15     99,495 /  99,585      2026-10-02_19-43-18 run_0000  (6.6e-2 @2k)
+#   run_0001     2     66     11     98,340 /  98,406      2026-10-02_19-43-18 run_0001  (7.2e-3 @2k)
+#   run_0002     4     48      8     99,792 /  99,840      2026-10-02_19-43-18 run_0002, 2026-10-05 (3.3e-3 @7k)
+#   run_0003     8     32      4     87,488 /  87,520      2026-10-02_19-43-18 run_0003  (6.7e-3 @2k)
+#   run_0004     8     72     12    433,224 / 433,296      2026-09-23 / 10-05 branches (7.6e-4 @26k)
+#
+# Settings: 6x6, J2 = 0, sign_rule FF (as every eigenbasis run), Metropolis
+# exchange sampler (SAMPLER auto -> metro on 6x6), 8192 samples, FIXED
+# alpha = 2.0, lr 5e-2 -> 2e-2, diag shift 1e-3 -> 1e-4, 10,000 steps. The
+# eigenbasis runs went 2k-26k steps; every step is logged, so compare at the
+# eigenbasis run's step count.
+#
+# Exact 6x6 reference: E0/site = -0.678872.
+#
+# Submit (b200-batch, 24 h windows; MAX_RUNTIME_MIN = 1380):
+#   CLUSTER=aicr-batch ./submit.sh config_spinbasis.toml
+# ----------------------------------------------------------------------
+[sweep_zip.model.vit]
+num_layers = [1, 2, 4, 8, 8]
+d_model    = [90, 66, 48, 32, 72]
+n_heads    = [15, 11, 8, 4, 12]
