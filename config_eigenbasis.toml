@@ -45,7 +45,7 @@ sweep_size = -1
 # Metropolis acceptance collapses to 0.07 and relErr@2k is ~2x worse than at
 # alpha = 1.25 (sweep 2026-10-06_11-43-04G261eafe); adaptive alpha is expected
 # to move away from 2.0.
-alpha = 2.0
+alpha = 1.25
 auto_alpha = false  # FIXED alpha (true => adaptive IS, alpha above is only the start)
 use_ntk = true   # neural tangent kernel
 on_the_fly = false
@@ -54,7 +54,7 @@ on_the_fly = false
 iter = 5000   # N_ITER
 layers = 2   # num_layers
 ratio = 6   # ratio: model dim : heads
-heads = 8   # n_heads
+heads = 12   # n_heads
 attention_mode = "factored"   # options: 
 # Token embedding for the 16 cluster eigenstates:
 #   "learnable" -> free 16 x d_model lookup table (original behaviour)
@@ -246,7 +246,7 @@ EXACT_SAMPLER_MAX_STATES = 200_000
 # ----------------------------------------------------------------------
 
 # ----------------------------------------------------------------------
-# ACTIVE (2026-10-08): 4x4 EXACT-SAMPLER SIZE SCAN, spin basis vs eigenbasis
+# (submitted 2026-10-08 as commits d773272 / def726f; kept for reference) 4x4 EXACT-SAMPLER SIZE SCAN, spin basis vs eigenbasis
 #
 # 4 widths at J2 = 0 = 4 runs, matched one-to-one with the 4 runs of
 # config_spinbasis.toml (same widths, same order: run_0000 = XS ... run_0003 = L). Everything else is the
@@ -274,8 +274,27 @@ EXACT_SAMPLER_MAX_STATES = 200_000
 #   J2 = [0.0, 0.5]
 # to run both (8 runs).
 #
-# Submit (devel, 4 h windows; MAX_RUNTIME_MIN = 230):
+# To rerun: [distribution] alpha = 2.0, [model] heads = 8, and restore
+#   [sweep_zip.model]
+#   heads = [1, 2, 4, 8]
+# ----------------------------------------------------------------------
+
+# ----------------------------------------------------------------------
+# ACTIVE (2026-10-09): 4x4 WITH THE 6x6 BASELINE SETTINGS -- one run
+#
+# Is the 4x4 eigenbasis worse than 6x6 because of the lattice (only 4
+# plaquette tokens on a 2x2 periodic grid: each plaquette's left and right
+# neighbours are the same plaquette), or because the size scan used smaller
+# models and alpha = 2? This run copies the 6x6 L2 baseline exactly:
+#   2 layers, ratio 6, 12 heads (d_model 72, ~117k params), embedding qn,
+#   factored attention, alpha = 1.25 FIXED, lr 5e-2 -> 2e-2, diag shift
+#   1e-3 -> 1e-4, 8192 samples. Only differences: L = 4, the exact sampler,
+#   5000 steps.
+# 6x6 reference at these settings: relErr 7.4e-3 @1k, 6.9e-3 @2k, 3.3e-3 @10k.
+#   ~7e-3 by 2k here  -> the lattice is fine; the scan was under-sized / alpha 2.
+#   stuck at a few %  -> the 2x2 token grid is a bad case for the eigenbasis ViT.
+# Exact 4x4 reference: E0/site = -0.701780.
+#
+# Submit (devel, 4 h window; MAX_RUNTIME_MIN = 230):
 #   ./submit.sh config_eigenbasis.toml
 # ----------------------------------------------------------------------
-[sweep_zip.model]
-heads = [1, 2, 4, 8]
